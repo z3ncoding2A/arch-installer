@@ -19,7 +19,8 @@ PASSWORD="123"
 NET=`ip -br l | awk '$1 !~ "lo|vir|wl" { print $1}'|head -n 1`
 WIFI_NIC=`ip -br l | awk '$1 ~ "wl" { print $1}'|head -n 1`
 ALL_NICS=`ip -br l | awk '{ print $1}'`
-DISK1=`lsblk -dn |awk '{print $1}'|grep -E "sda|nvme"|head -n 1`
+DISK1=`lsblk -dn |awk '{print $1}'|grep -E "sda|nvme|vda"|head 
+-n 1`
 SWAP_SIZE=`free -m|grep -i Mem: | awk '{print $2}'`     # swap set to RAM size to support hibernate
 
 
@@ -85,36 +86,36 @@ chmod a+x environment.sh
 
 
 
-#START=1
-#ESP=$(( $START+512 ))
-#BIOS_BOOT=$(( $ESP+2 ))
-#SWAP=$(( $BIOS_BOOT+$SWAP_SIZE ))
-#ROOT=100%
+START=1
+ESP=$(( $START+512 ))
+BIOS_BOOT=$(( $ESP+2 ))
+SWAP=$(( $BIOS_BOOT+$SWAP_SIZE ))
+ROOT=100%
 
 
 
 
-#echo
-#echo "Wiping Disk"
+echo
+echo "Wiping Disk"
 
-#wipefs -a $DISK
+wipefs -a $DISK
 
-#echo
-#echolsblk -dn |awk '{print $1}'|grep -E "sda|nvme"|head -n 1
-#echo "Creating Label"
+echo
+echolsblk -dn |awk '{print $1}'|grep -E "sda|nvme"|head -n 1
+echo "Creating Label"
 
-#parted -s ${DISK} mklabel gptlsblk -dn |awk '{print $1}'|grep -E "sda|nvme"|head -n 1
+parted -s ${DISK} mklabel gptlsblk -dn |awk '{print $1}'|grep -E "sda|nvme"|head -n 1
 
-#echo
-#echo
-#echo "Partitioning"
+echo
+echo
+echo "Partitioning"
 
-#parted -s --align=optimal ${DISK} mkpart BOOT,ESP fat32 1MiB 512MiB
-#parted -s ${DISK} set 1 esp on
-#parted -s --align=optimal ${DISK} mkpart BIOS_BOOT fat32 ${ESP}MiB ${BIOS_BOOT}MiB
-#parted -s ${DISK} set 2 bios_grub on
-#parted -s --align=optimal ${DISK} mkpart linux-swap ${BIOS_BOOT}MiB ${SWAP}MiB
-#parted -s --align=optimal ${DISK} mkpart linux ${SWAP}MiB 100%
+parted -s --align=optimal ${DISK} mkpart BOOT,ESP fat32 1MiB 512MiB
+parted -s ${DISK} set 1 esp on
+parted -s --align=optimal ${DISK} mkpart BIOS_BOOT fat32 ${ESP}MiB ${BIOS_BOOT}MiB
+parted -s ${DISK} set 2 bios_grub on
+parted -s --align=optimal ${DISK} mkpart linux-swap ${BIOS_BOOT}MiB ${SWAP}MiB
+parted -s --align=optimal ${DISK} mkpart linux ${SWAP}MiB 100%
 
 parted -s ${DISK} print
 
@@ -128,7 +129,7 @@ echo "Formatting Filesystems"
 
 
 mkfs.ext4 -F ${DISK}2
-mkfs.fat -F 32 ${DISK}4
+mkfs.vfat -F 32 ${DISK}4
 mkswap ${DISK}1
 swapon ${DISK}1
 
@@ -176,7 +177,6 @@ read continue
 
 
 reboot
-
 
 
 

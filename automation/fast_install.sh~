@@ -139,6 +139,9 @@ mount ${DISK}4 /mnt/boot/efi
 echo
 echo "Pacstrapping System"
 
+touch /mnt/etc/vconsole.conf
+echo "KEYMAP=us" >> /mnt/etc/vconsole.conf
+
 pacstrap -K /mnt base linux linux-headers linux-firmware broadcom-wl-dkms
 
 echo
