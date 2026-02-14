@@ -86,66 +86,61 @@ chmod a+x environment.sh
 
 
 
-START=1
-ESP=$(( $START+512 ))
-BIOS_BOOT=$(( $ESP+2 ))
-SWAP=$(( $BIOS_BOOT+$SWAP_SIZE ))
-ROOT=100%
+echo
+echo "Using existing partition layout — NO disk wipe."
 
-
-
+ROOT_PART="${DISK}3"
+EFI_PART="${DISK}1"
+HOME_LUKS_PART="${DISK}2"
 
 echo
-echo "Wiping Disk"
+echo "Formatting root and EFI partitions only..."
 
-wipefs -a $DISK
+# Format root
+mkfs.ext4 -F ${ROOT_PART}
 
-echo
-echolsblk -dn |awk '{print $1}'|grep -E "sda|nvme"|head -n 1
-echo "Creating Label"
-
-parted -s ${DISK} mklabel gptlsblk -dn |awk '{print $1}'|grep -E "sda|nvme"|head -n 1
+# Format EFI
+mkfs.vfat -F 32 ${EFI_PART}
 
 echo
-echo
-echo "Partitioning"
+echo "Opening existing LUKS /home partition..."
 
-parted -s --align=optimal ${DISK} mkpart BOOT,ESP fat32 1MiB 512MiB
-parted -s ${DISK} set 1 esp on
-parted -s --align=optimal ${DISK} mkpart BIOS_BOOT fat32 ${ESP}MiB ${BIOS_BOOT}MiB
-parted -s ${DISK} set 2 bios_grub on
-parted -s --align=optimal ${DISK} mkpart linux-swap ${BIOS_BOOT}MiB ${SWAP}MiB
-parted -s --align=optimal ${DISK} mkpart linux ${SWAP}MiB 100%
-
-parted -s ${DISK} print
-
+cryptsetup luksOpen ${HOME_LUKS_PART} homecrypt
 
 echo
-echo "Press the [ANY] key to continue...."
-read continue
+echo "Mounting filesystems..."
 
-echo
-echo "Formatting Filesystems"
+# Mount root
+mount ${ROOT_PART} /mnt
 
-
-mkfs.ext4 -F ${DISK}2
-mkfs.vfat -F 32 ${DISK}4
-mkswap ${DISK}1
-swapon ${DISK}1
-
-mount ${DISK}2 /mnt
+# Create mount points
 mkdir -p /mnt/boot/efi
-mount ${DISK}4 /mnt/boot/efi
+mkdir -p /mnt/home
+
+# Mount EFI
+mount ${EFI_PART} /mnt/boot/efi
+
+# Mount decrypted home
+mount /dev/mapper/homecrypt /mnt/home
 
 echo
-echo "Pacstrapping System"
+echo "Pacstrapping System..."
 
-pacstrap -K /mnt base linux linux-headers linux-firmware broadcom-wl-dkms
+pacstrap -K /mnt base linux linux-headers linux-firmware broadcom-wl-dkms git base-devel intel-ucode
 
 echo
-echo "Generating Filesystem Table"
+echo "Generating fstab..."
 
 genfstab -U /mnt >> /mnt/etc/fstab
+
+echo
+echo "Adding crypttab entry for /home..."
+
+UUID_HOME=$(blkid -s UUID -o value ${HOME_LUKS_PART})
+echo "homecrypt UUID=${UUID_HOME} none luks" >> /mnt/etc/crypttab
+
+echo
+echo "Done with partition setup."
 
 
 echo "Press the [ANY] key to continue...."
@@ -162,7 +157,7 @@ echo "Entering Chroot Environment"
 cp fast_install_stage2.sh /mnt
 cp environment.sh /mnt
 
-arch-chroot /mnt /fast_install_stage2.sh
+#arch-chroot /mnt /fast_install_stage2.sh
 
 echo
 echo "One Last Link"
