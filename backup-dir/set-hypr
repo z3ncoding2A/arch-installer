@@ -1,0 +1,258 @@
+#!/bin/bash
+
+prep_stage=(
+    qt5-wayland 
+    qt5ct
+    qt6-wayland 
+    qt6ct
+    qt5-svg
+    qt5-quickcontrols2
+    qt5-graphicaleffects
+    gtk3 
+    polkit-gnome 
+    pipewire 
+    wireplumber 
+    jq 
+    wl-clipboard 
+    cliphist 
+    python-requests 
+    pacman-contrib
+    kitty 
+    mako 
+    waybar
+    swww 
+    swaylock-effects 
+    wofi 
+    wlogout 
+    xdg-desktop-portal-hyprland 
+    swappy 
+    grim 
+    slurp 
+    thunar 
+    btop
+    firefox
+    thunderbird
+    mpv
+    pamixer 
+    pavucontrol 
+    brightnessctl 
+    bluez 
+    bluez-utils 
+    blueman 
+    network-manager-applet 
+    gvfs 
+    thunar-archive-plugin 
+    file-roller
+    starship 
+    papirus-icon-theme 
+    ttf-jetbrains-mono-nerd 
+    noto-fonts-emoji 
+    lxappearance 
+    xfce4-settings
+    sddm
+
+
+
+### Disable wifi powersave mode ###
+read -rep $'[\e[1;33mACTION\e[0m] - Would you like to disable WiFi powersave? (y,n) ' WIFI
+if [[ $WIFI == "Y" || $WIFI == "y" ]]; then
+    LOC="/etc/NetworkManager/conf.d/wifi-powersave.conf"
+    echo -e "$CNT - The following file has been created $LOC.\n"
+    echo -e "[connection]\nwifi.powersave = 2" | sudo tee -a $LOC &>> $INSTLOG
+    echo -en "$CNT - Restarting NetworkManager service, Please wait."
+    sleep 2
+    sudo systemctl restart NetworkManager &>> $INSTLOG
+    
+    #wait for services to restore (looking at you DNS)
+    for i in {1..6} 
+    do
+        echo -n "."
+        sleep 1
+    done
+    echo -en "Done!\n"
+    sleep 2
+    echo -e "\e[1A\e[K$COK - NetworkManager restart completed."
+fi
+
+#### Check for package manager ####
+if [ ! -f /sbin/paru ]; then  
+    echo -en "$CNT - Configuering paru."
+    git clone https://aur.archlinux.org/paru.git &>> $INSTLOG
+    cd paru
+    makepkg -si --noconfirm &>> ../$INSTLOG &
+    show_progress $!
+    if [ -f /sbin/paru ]; then
+        echo -e "\e[1A\e[K$COK - paru configured"
+        cd ..
+        
+        # update the paru database
+        echo -en "$CNT - Updating paru."
+        paru -Suy --noconfirm &>> $INSTLOG &
+        show_progress $!
+        echo -e "\e[1A\e[K$COK - paru updated."
+    else
+        # if this is hit then a package is missing, exit to review log
+        echo -e "\e[1A\e[K$CER - paru install failed, please check the install.log"
+        exit
+    fi
+fi
+
+
+    # Install the correct hyprland version
+    echo -e "$CNT - Installing Hyprland, this may take a while..."   
+    install_software hyprland
+
+    # Stage 1 - main components
+    echo -e "$CNT - Installing main components, this may take a while..."
+    for SOFTWR in ${install_stage[@]}; do
+        install_software $SOFTWR 
+    done
+
+    # Start the bluetooth service
+    echo -e "$CNT - Starting the Bluetooth Service..."
+    sudo systemctl enable --now bluetooth.service &>> $INSTLOG
+    sleep 2
+
+    # Enable the sddm login manager service
+    echo -e "$CNT - Enabling the SDDM Service..."
+    sudo systemctl enable sddm &>> $INSTLOG
+    sleep 2
+    
+    # Clean out other portals
+    echo -e "$CNT - Cleaning out conflicting xdg portals..."
+    yay -R --noconfirm xdg-desktop-portal-gnome xdg-desktop-portal-gtk &>> $INSTLOG
+fi
+
+### Copy Config Files ###
+read -rep $'[\e[1;33mACTION\e[0m] - Would you like to copy config files? (y,n) ' CFG
+if [[ $CFG == "Y" || $CFG == "y" ]]; then
+    echo -e "$CNT - Copying config files..."
+
+    # copy the HyprV directory
+    cp -R HyprV ~/.config/
+
+    #set the measuring unit
+    echo -e "$CNT - Attempring to set mesuring unit..."
+    if locale -a | grep -q ^en_US; then
+        echo -e "$COK - Setting mesuring system to imperial..."
+        ln -sf ~/.config/HyprV/waybar/conf/mesu-imp.jsonc ~/.config/HyprV/waybar/conf/mesu.jsonc
+        sed -i 's/SET_MESU=""/SET_MESU="I"/' ~/.config/HyprV/hyprv.conf
+    else
+        echo -e "$COK - Setting mesuring system to metric..."
+        sed -i 's/SET_MESU=""/SET_MESU="M"/' ~/.config/HyprV/hyprv.conf
+        ln -sf ~/.config/HyprV/waybar/conf/mesu-met.jsonc ~/.config/HyprV/waybar/conf/mesu.jsonc
+    fi
+
+    # Setup each appliaction
+    # check for existing config folders and backup 
+    for DIR in hypr kitty mako swaylock waybar wlogout wofi 
+    do 
+        DIRPATH=~/.config/$DIR
+        if [ -d "$DIRPATH" ]; then 
+            echo -e "$CAT - Config for $DIR located, backing up."
+            mv $DIRPATH $DIRPATH-back &>> $INSTLOG
+            echo -e "$COK - Backed up $DIR to $DIRPATH-back."
+        fi
+
+        # make new empty folders
+        mkdir -p $DIRPATH &>> $INSTLOG
+    done
+
+    # link up the config files
+    echo -e "$CNT - Setting up the new config..." 
+    cp ~/.config/HyprV/hypr/* ~/.config/hypr/
+    ln -sf ~/.config/HyprV/kitty/kitty.conf ~/.config/kitty/kitty.conf
+    ln -sf ~/.config/HyprV/mako/conf/config-dark ~/.config/mako/config
+    ln -sf ~/.config/HyprV/swaylock/config ~/.config/swaylock/config
+    ln -sf ~/.config/HyprV/waybar/conf/v4-config.jsonc ~/.config/waybar/config.jsonc
+    ln -sf ~/.config/HyprV/waybar/style/v4-style-dark.css ~/.config/waybar/style.css
+    ln -sf ~/.config/HyprV/wlogout/layout ~/.config/wlogout/layout
+    ln -sf ~/.config/HyprV/wofi/config ~/.config/wofi/config
+    ln -sf ~/.config/HyprV/wofi/style/v4-style-dark.css ~/.config/wofi/style.css
+
+
+    # add the Nvidia env file to the config (if needed)
+    if [[ "$ISNVIDIA" == true ]]; then
+        echo -e "\nsource = ~/.config/hypr/env_var_nvidia.conf" >> ~/.config/hypr/hyprland.conf
+    fi
+
+    # Copy the SDDM theme
+    echo -e "$CNT - Setting up the login screen."
+    sudo cp -R Extras/sdt /usr/share/sddm/themes/
+    sudo chown -R $USER:$USER /usr/share/sddm/themes/sdt
+    sudo mkdir /etc/sddm.conf.d
+    echo -e "[Theme]\nCurrent=sdt" | sudo tee -a /etc/sddm.conf.d/10-theme.conf &>> $INSTLOG
+    WLDIR=/usr/share/wayland-sessions
+    if [ -d "$WLDIR" ]; then
+        echo -e "$COK - $WLDIR found"
+    else
+        echo -e "$CWR - $WLDIR NOT found, creating..."
+        sudo mkdir $WLDIR
+    fi 
+    
+    # stage the .desktop file
+    sudo cp Extras/hyprland.desktop /usr/share/wayland-sessions/
+
+    # setup the first look and feel as dark
+    xfconf-query -c xsettings -p /Net/ThemeName -s "Adwaita-dark"
+    xfconf-query -c xsettings -p /Net/IconThemeName -s "Papirus-Dark"
+    gsettings set org.gnome.desktop.interface gtk-theme "Adwaita-dark"
+    gsettings set org.gnome.desktop.interface icon-theme "Papirus-Dark"
+    cp -f ~/.config/HyprV/backgrounds/v4-background-dark.jpg /usr/share/sddm/themes/sdt/wallpaper.jpg
+fi
+
+### Install the starship shell ###
+read -rep $'[\e[1;33mACTION\e[0m] - Would you like to activate the starship shell? (y,n) ' STAR
+if [[ $STAR == "Y" || $STAR == "y" ]]; then
+    # install the starship shell
+    echo -e "$CNT - Hansen Crusher, Engage!"
+    echo -e "$CNT - Updating .bashrc..."
+    echo -e '\neval "$(starship init bash)"' >> ~/.bashrc
+    echo -e "$CNT - copying starship config file to ~/.config ..."
+    cp Extras/starship.toml ~/.config/
+fi
+
+### Install software for Asus ROG laptops ###
+read -rep $'[\e[1;33mACTION\e[0m] - For ASUS ROG Laptops - Would you like to install Asus ROG software support? (y,n) ' ROG
+if [[ $ROG == "Y" || $ROG == "y" ]]; then
+    echo -e "$CNT - Adding Keys..."
+    sudo pacman-key --recv-keys 8F654886F17D497FEFE3DB448B15A6B0E9A3FA35 &>> $INSTLOG
+    sudo pacman-key --finger 8F654886F17D497FEFE3DB448B15A6B0E9A3FA35 &>> $INSTLOG
+    sudo pacman-key --lsign-key 8F654886F17D497FEFE3DB448B15A6B0E9A3FA35 &>> $INSTLOG
+    sudo pacman-key --finger 8F654886F17D497FEFE3DB448B15A6B0E9A3FA35 &>> $INSTLOG
+
+    LOC="/etc/pacman.conf"
+    echo -e "$CNT - Updating $LOC with g14 repo."
+    echo -e "\n[g14]\nServer = https://arch.asus-linux.org" | sudo tee -a $LOC &>> $INSTLOG
+    echo -e "$CNT - Update the system..."
+    sudo pacman -Suy --noconfirm &>> $INSTLOG
+
+    echo -e "$CNT - Installing ROG pacakges..."
+    install_software asusctl
+    install_software supergfxctl
+    install_software rog-control-center
+
+    echo -e "$CNT - Activating ROG services..."
+    sudo systemctl enable --now power-profiles-daemon.service &>> $INSTLOG
+    sleep 2
+    sudo systemctl enable --now supergfxd &>> $INSTLOG
+    sleep 2
+
+    # add the ROG keybinding file to the config
+    echo -e "\nsource = ~/.config/hypr/rog-g15-strix-2021-binds.conf" >> ~/.config/hypr/hyprland.conf
+fi
+
+### Script is done ###
+echo -e "$CNT - Script had completed!"
+if [[ "$ISNVIDIA" == true ]]; then 
+    echo -e "$CAT - Since we attempted to setup an Nvidia GPU the script will now end and you should reboot.
+    Please type 'reboot' at the prompt and hit Enter when ready."
+    exit
+fi
+
+read -rep $'[\e[1;33mACTION\e[0m] - Would you like to start Hyprland now? (y,n) ' HYP
+if [[ $HYP == "Y" || $HYP == "y" ]]; then
+    exec sudo systemctl start sddm &>> $INSTLOG
+else
+    exit
+fi
