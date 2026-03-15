@@ -1,0 +1,8 @@
+## 1.	Disable globbing
+##		$ setopt NO_GLOB
+
+## 2.	Rsync backup
+sudo rsync -aAXv / --exclude={/dev/*,/proc/*,/sys/*,/tmp/*,/run/*,/mnt/*,/media/*,/lost+found} /path/to/backup/directory
+
+## 3.	Enable globbing
+##		$ unsetopt NO_GLOB

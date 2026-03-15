@@ -1,0 +1,36 @@
+#!/bin/bash
+
+# Set the backup directory path (you should change this if needed)
+BACKUP_DIR="/mnt/1/Full-System_backup-2026-02-21"
+MOUNT_DIR="/mnt"  # Mount point of your fresh Arch system
+
+# Ensure the script is run as root
+if [ "$(id -u)" -ne 0 ]; then
+    echo "You must run this script as root."
+    exit 1
+fi
+
+# Step 1: Restore the system files using rsync
+echo "Restoring system files..."
+rsync -aAXv $BACKUP_DIR/ $MOUNT_DIR/ --exclude={/dev/*,/proc/*,/sys/*,/tmp/*,/run/*,/mnt/*,/media/*,/lost+found}
+
+# Step 2: Restore the bootloader (GRUB example)
+echo "Restoring bootloader..."
+# Reinstall GRUB (adjust for your system if needed)
+grub-install --target=x86_64-efi --efi-directory=$MOUNT_DIR/boot --bootloader-id=GRUB
+grub-mkconfig -o $MOUNT_DIR/boot/grub/grub.cfg
+
+# Step 3: Restore installed packages from the packages list
+echo "Restoring installed packages..."
+if [ -f "$BACKUP_DIR/packages.txt" ]; then
+    cat $BACKUP_DIR/packages.txt | pacman -S --needed - < /dev/stdin
+else
+    echo "No package list found. Skipping package restoration."
+fi
+
+# Step 4: Restore user configurations (home directory backup)
+echo "Restoring user configurations..."
+rsync -avh $BACKUP_DIR/home_user_backup/ /home/username/
+
+# Step 5: Cleanup and finish
+echo "Restoration complete! Please reboot the system."
