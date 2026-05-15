@@ -1,0 +1,10 @@
+rsync -aAXv --progress --delete \
+--exclude={"/dev/*","/proc/*","/sys/*","/tmp/*","/run/*","/mnt/*","/media/*","/lost+found","/etc/fstab","/etc/crypttab","/etc/hostname","/boot/*"} \
+/mnt/Full-System-Backup/ /
+
+pacman -S linux linux-headers  # Or 'linux-zen' if that's what you use
+
+pacman -D --check
+pacman -Syu
+
+mkinitcpio -P
